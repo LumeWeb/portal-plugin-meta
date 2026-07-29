@@ -155,25 +155,66 @@ func (s *MetaServiceDefault) AggregateStats(ctx context.Context) (*pluginCore.Ag
 		return nil, err
 	}
 
-	var totalCIDs, totalStorageBytes, totalPins uint64
+	// Build a map of upload stats for fallback when a protocol doesn't
+	// implement ProtocolStorageStatsProvider.
+	uploadMap := make(map[string]core.ProtocolUploadStat)
 	for _, us := range uploadStats {
-		totalCIDs += us.TotalUploads
-		totalStorageBytes += us.TotalStorageBytes
+		uploadMap[us.Protocol] = us
+	}
+
+	// Collect the unified set of protocol names from upload stats, pin
+	// stats, and registered protocols.
+	protocolSet := make(map[string]struct{})
+	for _, us := range uploadStats {
+		protocolSet[us.Protocol] = struct{}{}
+	}
+	for _, ps := range pinStats {
+		protocolSet[ps.Protocol] = struct{}{}
+	}
+	for name := range core.GetProtocols() {
+		protocolSet[name] = struct{}{}
+	}
+
+	var totalCIDs, totalStorageBytes, totalPins uint64
+	for name := range protocolSet {
+		// Try ProtocolStorageStatsProvider first for accurate storage bytes.
+		storageBytes, objectCount, ok := s.getProtocolStorageStats(ctx, name)
+		if ok {
+			totalCIDs += objectCount
+			totalStorageBytes += storageBytes
+		} else {
+			us := uploadMap[name]
+			totalCIDs += us.TotalUploads
+			totalStorageBytes += us.TotalStorageBytes
+		}
 	}
 	for _, ps := range pinStats {
 		totalPins += ps.TotalPins
 	}
 
-	// TODO: compute real TotalStorageDays once core PinService exposes
-	// a global pin iterator or aggregate storage-days metric. The per-hash
-	// GetAllPinsByHash API is not suitable for a global aggregation.
-
 	return &pluginCore.AggregateStatsResponse{
 		TotalCIDs:         totalCIDs,
 		TotalPinners:      totalPins,
 		TotalStorageBytes: totalStorageBytes,
-		TotalStorageDays:  0,
 	}, nil
+}
+
+// getProtocolStorageStats returns (storageBytes, objectCount, true) if the
+// protocol implements ProtocolStorageStatsProvider, otherwise (0, 0, false).
+func (s *MetaServiceDefault) getProtocolStorageStats(ctx context.Context, name string) (storageBytes, objectCount uint64, ok bool) {
+	proto := core.GetProtocol(name)
+	if proto == nil {
+		return 0, 0, false
+	}
+	statsProvider, isStats := proto.(core.ProtocolStorageStatsProvider)
+	if !isStats {
+		return 0, 0, false
+	}
+	stats, err := statsProvider.StorageStats(ctx)
+	if err != nil || stats == nil {
+		return 0, 0, false
+	}
+	return stats.StorageBytes, stats.ObjectCount, true
 }
 
 func (s *MetaServiceDefault) ProtocolStats(ctx context.Context) (*pluginCore.ProtocolStatsResponse, error) {
@@ -192,20 +233,23 @@ func (s *MetaServiceDefault) ProtocolStats(ctx context.Context) (*pluginCore.Pro
 		pinMap[ps.Protocol] = ps.TotalPins
 	}
 
-	// Build unified sorted protocol set from both upload and pin stats so
-	// protocols with pins but no uploads are not dropped, and output
-	// order is deterministic.
+	// Build upload stats map for fallback.
 	uploadMap := make(map[string]core.ProtocolUploadStat)
 	for _, us := range uploadStats {
 		uploadMap[us.Protocol] = us
 	}
 
+	// Build unified sorted protocol set from upload stats, pin stats,
+	// and registered protocols so nothing is dropped and order is deterministic.
 	protocolSet := make(map[string]struct{})
 	for _, us := range uploadStats {
 		protocolSet[us.Protocol] = struct{}{}
 	}
 	for _, ps := range pinStats {
 		protocolSet[ps.Protocol] = struct{}{}
+	}
+	for name := range core.GetProtocols() {
+		protocolSet[name] = struct{}{}
 	}
 
 	protocols := make([]string, 0, len(protocolSet))
@@ -216,13 +260,24 @@ func (s *MetaServiceDefault) ProtocolStats(ctx context.Context) (*pluginCore.Pro
 
 	resp := &pluginCore.ProtocolStatsResponse{Protocols: make([]pluginCore.ProtocolStat, 0, len(protocols))}
 	for _, name := range protocols {
-		us := uploadMap[name]
-		resp.Protocols = append(resp.Protocols, pluginCore.ProtocolStat{
-			Protocol:          name,
-			TotalUploads:      us.TotalUploads,
-			TotalStorageBytes: us.TotalStorageBytes,
-			TotalPins:         pinMap[name],
-		})
+		// Try ProtocolStorageStatsProvider first for accurate storage bytes.
+		storageBytes, objectCount, ok := s.getProtocolStorageStats(ctx, name)
+		if ok {
+			resp.Protocols = append(resp.Protocols, pluginCore.ProtocolStat{
+				Protocol:          name,
+				TotalUploads:      objectCount,
+				TotalStorageBytes: storageBytes,
+				TotalPins:         pinMap[name],
+			})
+		} else {
+			us := uploadMap[name]
+			resp.Protocols = append(resp.Protocols, pluginCore.ProtocolStat{
+				Protocol:          name,
+				TotalUploads:      us.TotalUploads,
+				TotalStorageBytes: us.TotalStorageBytes,
+				TotalPins:         pinMap[name],
+			})
+		}
 	}
 	return resp, nil
 }

@@ -289,3 +289,87 @@ func gormModel() gorm.Model {
 		UpdatedAt: time.Now(),
 	}
 }
+
+// --- ProtocolStorageStatsProvider integration ---
+
+func TestMetaService_ProtocolStats_UsesStorageStatsProvider(t *testing.T) {
+	opts := coreTesting.CombineOptions(
+		coreTesting.NewMockPluginBuilder("meta").
+			WithService("meta", NewMetaService).
+			BuilderOption(),
+		coreTesting.WithMockUploadService(),
+		coreTesting.WithMockPinService(),
+		coreTesting.WithMockRenterService(),
+		withStatsProtocol("sia", &core.ProtocolStorageStats{
+			ObjectCount:          42,
+			StorageBytes:         2048,
+			PhysicalStorageBytes: 8192,
+			PhysicalUnitCount:    10,
+		}),
+	)
+
+	coreTesting.RunTestCase(t, func(tb coreTesting.TB, ctx coreTesting.TestContext) {
+		uploadSvc := coreTesting.GetMockUploadService(ctx)
+		pinSvc := coreTesting.GetMockPinService(ctx)
+
+		// Upload stats return different numbers; StorageStats should take priority.
+		uploadSvc.EXPECT().GetUploadStats(mock.Anything).Return([]core.ProtocolUploadStat{
+			{Protocol: "sia", TotalUploads: 99, TotalStorageBytes: 9999},
+		}, nil).Once()
+		pinSvc.EXPECT().GetPinStats(mock.Anything).Return([]core.ProtocolPinStat{
+			{Protocol: "sia", TotalPins: 15},
+		}, nil).Once()
+
+		svc := core.GetService[pluginCore.MetaService](ctx, pluginCore.META_SERVICE)
+		require.NotNil(tb, svc)
+
+		resp, err := svc.ProtocolStats(context.Background())
+		require.NoError(tb, err)
+		require.Len(tb, resp.Protocols, 1)
+
+		assert.Equal(tb, "sia", resp.Protocols[0].Protocol)
+		assert.Equal(tb, uint64(42), resp.Protocols[0].TotalUploads)
+		assert.Equal(tb, uint64(2048), resp.Protocols[0].TotalStorageBytes)
+		assert.Equal(tb, uint64(15), resp.Protocols[0].TotalPins)
+	}, opts)
+}
+
+func TestMetaService_AggregateStats_UsesStorageStatsProvider(t *testing.T) {
+	opts := coreTesting.CombineOptions(
+		coreTesting.NewMockPluginBuilder("meta").
+			WithService("meta", NewMetaService).
+			BuilderOption(),
+		coreTesting.WithMockUploadService(),
+		coreTesting.WithMockPinService(),
+		coreTesting.WithMockRenterService(),
+		withStatsProtocol("sia", &core.ProtocolStorageStats{
+			ObjectCount:          42,
+			StorageBytes:         2048,
+			PhysicalStorageBytes: 8192,
+			PhysicalUnitCount:    10,
+		}),
+	)
+
+	coreTesting.RunTestCase(t, func(tb coreTesting.TB, ctx coreTesting.TestContext) {
+		uploadSvc := coreTesting.GetMockUploadService(ctx)
+		pinSvc := coreTesting.GetMockPinService(ctx)
+
+		uploadSvc.EXPECT().GetUploadStats(mock.Anything).Return([]core.ProtocolUploadStat{
+			{Protocol: "sia", TotalUploads: 99, TotalStorageBytes: 9999},
+		}, nil).Once()
+		pinSvc.EXPECT().GetPinStats(mock.Anything).Return([]core.ProtocolPinStat{
+			{Protocol: "sia", TotalPins: 15},
+		}, nil).Once()
+
+		svc := core.GetService[pluginCore.MetaService](ctx, pluginCore.META_SERVICE)
+		require.NotNil(tb, svc)
+
+		resp, err := svc.AggregateStats(context.Background())
+		require.NoError(tb, err)
+
+		// Should use StorageStatsProvider values, not GetUploadStats.
+		assert.Equal(tb, uint64(42), resp.TotalCIDs)
+		assert.Equal(tb, uint64(15), resp.TotalPinners)
+		assert.Equal(tb, uint64(2048), resp.TotalStorageBytes)
+	}, opts)
+}
