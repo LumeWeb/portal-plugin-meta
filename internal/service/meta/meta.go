@@ -164,15 +164,10 @@ func (s *MetaServiceDefault) AggregateStats(ctx context.Context) (*pluginCore.Ag
 		totalPins += ps.TotalPins
 	}
 
-	// TODO: compute real TotalStorageDays once core PinService exposes
-	// a global pin iterator or aggregate storage-days metric. The per-hash
-	// GetAllPinsByHash API is not suitable for a global aggregation.
-
 	return &pluginCore.AggregateStatsResponse{
 		TotalCIDs:         totalCIDs,
 		TotalPinners:      totalPins,
 		TotalStorageBytes: totalStorageBytes,
-		TotalStorageDays:  0,
 	}, nil
 }
 
