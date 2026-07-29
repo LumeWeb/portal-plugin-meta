@@ -101,7 +101,7 @@ func (a *API) Configure(gRouter router.Router, accessSvc core.AccessService) err
 			router.WithCors(),
 			router.WithSwaggerOptions(
 				router.WithSummary("Export Sia object for a CID"),
-				router.WithDescription("Returns the indexed SharedObject — slab layout, encryption keys, sector refs — so any Sia account holder can retrieve and decrypt the block directly from the Sia network."),
+				router.WithDescription("Returns the indexed SharedObject — slab layout, encryption metadata, sector refs — so any Sia account holder can retrieve and decrypt the block directly from the Sia network."),
 				router.WithTags("export"),
 				router.WithPathParam("cid", "Content identifier (CID)", ""),
 				router.WithSuccessResponse(http.StatusOK, "Sia object export", router.WithJSONContent(pluginCore.CIDExportResponse{})),
