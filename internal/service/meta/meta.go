@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/ipfs/go-cid"
@@ -191,23 +192,30 @@ func (s *MetaServiceDefault) ProtocolStats(ctx context.Context) (*pluginCore.Pro
 		pinMap[ps.Protocol] = ps.TotalPins
 	}
 
-	// Build unified protocol set from both upload and pin stats so
-	// protocols with pins but no uploads are not dropped.
+	// Build unified sorted protocol set from both upload and pin stats so
+	// protocols with pins but no uploads are not dropped, and output
+	// order is deterministic.
 	uploadMap := make(map[string]core.ProtocolUploadStat)
 	for _, us := range uploadStats {
 		uploadMap[us.Protocol] = us
 	}
 
-	protocols := make(map[string]struct{})
+	protocolSet := make(map[string]struct{})
 	for _, us := range uploadStats {
-		protocols[us.Protocol] = struct{}{}
+		protocolSet[us.Protocol] = struct{}{}
 	}
 	for _, ps := range pinStats {
-		protocols[ps.Protocol] = struct{}{}
+		protocolSet[ps.Protocol] = struct{}{}
 	}
 
+	protocols := make([]string, 0, len(protocolSet))
+	for name := range protocolSet {
+		protocols = append(protocols, name)
+	}
+	slices.Sort(protocols)
+
 	resp := &pluginCore.ProtocolStatsResponse{Protocols: make([]pluginCore.ProtocolStat, 0, len(protocols))}
-	for name := range protocols {
+	for _, name := range protocols {
 		us := uploadMap[name]
 		resp.Protocols = append(resp.Protocols, pluginCore.ProtocolStat{
 			Protocol:          name,
