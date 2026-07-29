@@ -21,10 +21,9 @@ type CIDStatsResponse struct {
 
 // AggregateStatsResponse is returned by AggregateStats.
 type AggregateStatsResponse struct {
-	TotalCIDs         uint64  `json:"total_cids"`
-	TotalPinners      uint64  `json:"total_pinners"`
-	TotalStorageBytes uint64  `json:"total_storage_bytes"`
-	TotalStorageDays  float64 `json:"total_storage_days"`
+	TotalCIDs         uint64 `json:"total_cids"`
+	TotalPinners      uint64 `json:"total_pinners"`
+	TotalStorageBytes uint64 `json:"total_storage_bytes"`
 }
 
 // ProtocolStatsResponse is returned by ProtocolStats.
