@@ -53,67 +53,79 @@ func NewAPI() (core.API, []core.ContextBuilderOption, error) {
 }
 
 func (a *API) Configure(gRouter router.Router, accessSvc core.AccessService) error {
-	metaRouter, err := gRouter.Group("/api")
+	statsRouter, err := gRouter.Group("/api/stats")
 	if err != nil {
-		return fmt.Errorf("failed to create meta router group: %w", err)
+		return fmt.Errorf("failed to create stats router group: %w", err)
+	}
+	exportRouter, err := gRouter.Group("/api/export")
+	if err != nil {
+		return fmt.Errorf("failed to create export router group: %w", err)
 	}
 
-	routes := []router.Route{
-		router.NewRoute(http.MethodGet, "/meta/cid/:cid", a.handleCIDStats,
+	statsRoutes := []router.Route{
+		router.NewRoute(http.MethodGet, "/cid/:cid", a.handleCIDStats,
 			router.WithCors(),
 			router.WithSwaggerOptions(
 				router.WithSummary("CID stats"),
 				router.WithDescription("Returns anonymized stats for a CID: pinned status, pinner count, size, storage-days, and quota health (when quota plugin is available)."),
-				router.WithTags("meta", "stats"),
+				router.WithTags("stats"),
 				router.WithPathParam("cid", "Content identifier (CID)", ""),
 				router.WithSuccessResponse(http.StatusOK, "CID stats", router.WithJSONContent(pluginCore.CIDStatsResponse{})),
 				router.WithErrorResponses(router.DefaultPublicErrorResponses()),
 			),
 		),
-		router.NewRoute(http.MethodGet, "/meta/stats", a.handleAggregateStats,
+		router.NewRoute(http.MethodGet, "/aggregate", a.handleAggregateStats,
 			router.WithCors(),
 			router.WithSwaggerOptions(
 				router.WithSummary("Aggregate stats"),
 				router.WithDescription("Total CIDs, pinners, storage bytes across all protocols."),
-				router.WithTags("meta", "stats"),
+				router.WithTags("stats"),
 				router.WithSuccessResponse(http.StatusOK, "Aggregate stats", router.WithJSONContent(pluginCore.AggregateStatsResponse{})),
 				router.WithErrorResponses(router.DefaultPublicErrorResponses()),
 			),
 		),
-		router.NewRoute(http.MethodGet, "/meta/stats/protocols", a.handleProtocolStats,
+		router.NewRoute(http.MethodGet, "/protocols", a.handleProtocolStats,
 			router.WithCors(),
 			router.WithSwaggerOptions(
 				router.WithSummary("Per-protocol stats"),
 				router.WithDescription("Total uploads, storage bytes, and pin counts broken down by protocol."),
-				router.WithTags("meta", "stats"),
+				router.WithTags("stats"),
 				router.WithSuccessResponse(http.StatusOK, "Per-protocol stats", router.WithJSONContent(pluginCore.ProtocolStatsResponse{})),
 				router.WithErrorResponses(router.DefaultPublicErrorResponses()),
 			),
 		),
-		router.NewRoute(http.MethodGet, "/meta/cid/:cid/sia-object", a.handleExport,
+	}
+
+	exportRoutes := []router.Route{
+		router.NewRoute(http.MethodGet, "/cid/:cid/sia-object", a.handleExport,
 			router.WithCors(),
 			router.WithSwaggerOptions(
 				router.WithSummary("Export Sia object for a CID"),
-				router.WithDescription("Returns the indexd SharedObject — slab layout, encryption keys, sector refs — so any Sia account holder can retrieve and decrypt the block directly from the Sia network."),
-				router.WithTags("meta", "export"),
+				router.WithDescription("Returns the indexed SharedObject — slab layout, encryption keys, sector refs — so any Sia account holder can retrieve and decrypt the block directly from the Sia network."),
+				router.WithTags("export"),
 				router.WithPathParam("cid", "Content identifier (CID)", ""),
 				router.WithSuccessResponse(http.StatusOK, "Sia object export", router.WithJSONContent(pluginCore.CIDExportResponse{})),
 				router.WithErrorResponses(router.DefaultPublicErrorResponses()),
 			),
 		),
-		router.NewRoute(http.MethodGet, "/meta/cid/:cid/dag", a.handleDAGExport,
+		router.NewRoute(http.MethodGet, "/cid/:cid/dag", a.handleDAGExport,
 			router.WithCors(),
 			router.WithSwaggerOptions(
 				router.WithSummary("Export full DAG structure for a CID"),
 				router.WithDescription("Returns the full block DAG — all blocks, their parent→child relationships, sizes, and per-block Sia object references."),
-				router.WithTags("meta", "export"),
+				router.WithTags("export"),
 				router.WithPathParam("cid", "Root content identifier (CID)", ""),
 				router.WithSuccessResponse(http.StatusOK, "DAG export", router.WithJSONContent(pluginCore.DAGExportResponse{})),
 				router.WithErrorResponses(router.DefaultPublicErrorResponses()),
 			),
 		),
 	}
-	return router.RegisterRoutes(metaRouter, accessSvc, core.GetAPI(a.Name()).Subdomain(), routes)
+
+	subdomain := core.GetAPI(a.Name()).Subdomain()
+	if err := router.RegisterRoutes(statsRouter, accessSvc, subdomain, statsRoutes); err != nil {
+		return err
+	}
+	return router.RegisterRoutes(exportRouter, accessSvc, subdomain, exportRoutes)
 }
 
 func (a *API) handleCIDStats(c echo.Context) error {

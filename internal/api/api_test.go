@@ -75,11 +75,11 @@ func TestAPI_RegistersAllRoutes(t *testing.T) {
 			method string
 			path   string
 		}{
-			{http.MethodGet, "/api/meta/cid/" + testCID},
-			{http.MethodGet, "/api/meta/cid/" + testCID + "/sia-object"},
-			{http.MethodGet, "/api/meta/cid/" + testCID + "/dag"},
-			{http.MethodGet, "/api/meta/stats"},
-			{http.MethodGet, "/api/meta/stats/protocols"},
+			{http.MethodGet, "/api/stats/cid/" + testCID},
+			{http.MethodGet, "/api/export/cid/" + testCID + "/sia-object"},
+			{http.MethodGet, "/api/export/cid/" + testCID + "/dag"},
+			{http.MethodGet, "/api/stats/aggregate"},
+			{http.MethodGet, "/api/stats/protocols"},
 		}
 
 		for _, r := range expectedRoutes {
@@ -114,7 +114,7 @@ func TestAPI_CIDStats_ReturnsStats(t *testing.T) {
 		pinSvc.EXPECT().UploadPinnedGlobal(mock.Anything, mock.Anything).Return(true, nil).Once()
 		pinSvc.EXPECT().GetAllPinsByHash(mock.Anything, mock.Anything).Return([]*models.Pin{}, nil).Once()
 
-		req := ctx.NewAPIRequest(http.MethodGet, "/api/meta/cid/"+testCID, nil)
+		req := ctx.NewAPIRequest(http.MethodGet, "/api/stats/cid/"+testCID, nil)
 		rec := httptest.NewRecorder()
 		ctx.Router().ServeHTTP(rec, req)
 
@@ -143,7 +143,7 @@ func TestAPI_CIDStats_NotFound(t *testing.T) {
 
 		uploadSvc.EXPECT().GetUpload(mock.Anything, mock.Anything).Return(nil, core.ErrUploadNotFound).Once()
 
-		req := ctx.NewAPIRequest(http.MethodGet, "/api/meta/cid/"+testCID, nil)
+		req := ctx.NewAPIRequest(http.MethodGet, "/api/stats/cid/"+testCID, nil)
 		rec := httptest.NewRecorder()
 		ctx.Router().ServeHTTP(rec, req)
 
@@ -171,7 +171,7 @@ func TestAPI_AggregateStats_ReturnsStats(t *testing.T) {
 			{Protocol: "sia", TotalPins: 5},
 		}, nil).Once()
 
-		req := ctx.NewAPIRequest(http.MethodGet, "/api/meta/stats", nil)
+		req := ctx.NewAPIRequest(http.MethodGet, "/api/stats/aggregate", nil)
 		rec := httptest.NewRecorder()
 		ctx.Router().ServeHTTP(rec, req)
 
@@ -208,7 +208,7 @@ func TestAPI_ProtocolStats_ReturnsStats(t *testing.T) {
 			{Protocol: "s3", TotalPins: 10},
 		}, nil).Once()
 
-		req := ctx.NewAPIRequest(http.MethodGet, "/api/meta/stats/protocols", nil)
+		req := ctx.NewAPIRequest(http.MethodGet, "/api/stats/protocols", nil)
 		rec := httptest.NewRecorder()
 		ctx.Router().ServeHTTP(rec, req)
 
