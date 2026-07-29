@@ -1,0 +1,8 @@
+template: testify
+template-data:
+  unroll-variadic: true
+filename: "mock_{{.InterfaceName}}.go"
+packages:
+  go.lumeweb.com/portal-plugin-meta/core:
+    interfaces:
+      MetaService: {}
