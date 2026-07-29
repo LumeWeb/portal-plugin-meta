@@ -57,11 +57,11 @@ The plugin registers a `core.Service` (MetaService) and a `core.API` on the `met
 - `core/mock_MetaService.go` — mockery-generated mock
 
 ### Endpoints
-- `GET /api/meta/cid/:cid` — pinned status, pinner count, size, storage-days, quota health (when quota plugin available)
-- `GET /api/meta/cid/:cid/sia-object` — Sia SharedObject export (slabs, encryption keys, sector refs)
-- `GET /api/meta/cid/:cid/dag` — full DAG export (tree of SharedObjects via ProtocolDAGProvider)
-- `GET /api/meta/stats` — aggregate totals across all protocols
-- `GET /api/meta/stats/protocols` — per-protocol upload/storage/pin counts
+- `GET /api/stats/cid/:cid` — pinned status, pinner count, size, storage-days, quota health (when quota plugin available)
+- `GET /api/stats/aggregate` — aggregate totals across all protocols
+- `GET /api/stats/protocols` — per-protocol upload/storage/pin counts
+- `GET /api/export/cid/:cid/sia-object` — Sia SharedObject export (slabs, encryption keys, sector refs)
+- `GET /api/export/cid/:cid/dag` — full DAG export (tree of SharedObjects via ProtocolDAGProvider)
 
 ### Quota Integration
 The `CIDStats` endpoint enriches its response with quota health data when `portal-plugin-quota` is installed:
