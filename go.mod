@@ -7,8 +7,8 @@ require (
 	github.com/ipfs/go-cid v0.6.2
 	github.com/labstack/echo/v4 v4.15.4
 	github.com/stretchr/testify v1.11.1
-	go.lumeweb.com/httputil v0.5.6
-	go.lumeweb.com/portal v0.5.2-0.20260729212645-a4d79a550621
+	go.lumeweb.com/httputil v0.5.7
+	go.lumeweb.com/portal v0.5.2-0.20260730184509-55cda2c704b1
 	go.lumeweb.com/portal-plugin-quota v0.1.1-0.20260729192736-97e2777ce46c
 	go.lumeweb.com/portal-router v0.7.6
 	gorm.io/gorm v1.31.2
@@ -188,11 +188,11 @@ require (
 	go.opentelemetry.io/proto/otlp v1.10.0 // indirect
 	go.shabbyrobe.org/gocovmerge v0.0.0-20230507111327-fa4f82cfbf4d // indirect
 	go.sia.tech/core v0.21.7 // indirect
-	go.sia.tech/coreutils v0.23.5 // indirect
-	go.sia.tech/indexd v0.4.0 // indirect
+	go.sia.tech/coreutils v0.23.6-0.20260717131215-dfd89d065259 // indirect
+	go.sia.tech/indexd v0.4.1 // indirect
 	go.sia.tech/jape v0.14.1 // indirect
 	go.sia.tech/mux v1.5.3 // indirect
-	go.sia.tech/siastorage v0.1.1-0.20260714120443-c13c06751808 // indirect
+	go.sia.tech/siastorage v0.1.1-0.20260730113653-4abba8d7d3ea // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.28.0 // indirect

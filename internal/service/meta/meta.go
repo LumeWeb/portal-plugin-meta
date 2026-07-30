@@ -2,7 +2,6 @@ package meta
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -96,7 +95,7 @@ func (s *MetaServiceDefault) CIDStats(ctx context.Context, cidStr string) (*plug
 	if err != nil {
 		return nil, err
 	}
-	resp.PinnerCount = uint64(len(pins))
+	resp.PinCount = uint64(len(pins))
 
 	if len(pins) == 0 {
 		return resp, nil
@@ -145,56 +144,22 @@ func (s *MetaServiceDefault) CIDStats(ctx context.Context, cidStr string) (*plug
 }
 
 func (s *MetaServiceDefault) AggregateStats(ctx context.Context) (*pluginCore.AggregateStatsResponse, error) {
-	uploadStats, err := s.uploadSvc.GetUploadStats(ctx)
+	// Derive from ProtocolStats to avoid duplicated logic.
+	protoResp, err := s.ProtocolStats(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	pinStats, err := s.pinSvc.GetPinStats(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Build a map of upload stats for fallback when a protocol doesn't
-	// implement ProtocolStorageStatsProvider.
-	uploadMap := make(map[string]core.ProtocolUploadStat)
-	for _, us := range uploadStats {
-		uploadMap[us.Protocol] = us
-	}
-
-	// Collect the unified set of protocol names from upload stats, pin
-	// stats, and registered protocols.
-	protocolSet := make(map[string]struct{})
-	for _, us := range uploadStats {
-		protocolSet[us.Protocol] = struct{}{}
-	}
-	for _, ps := range pinStats {
-		protocolSet[ps.Protocol] = struct{}{}
-	}
-	for name := range core.GetProtocols() {
-		protocolSet[name] = struct{}{}
-	}
-
-	var totalCIDs, totalStorageBytes, totalPins uint64
-	for name := range protocolSet {
-		// Try ProtocolStorageStatsProvider first for accurate storage bytes.
-		storageBytes, objectCount, ok := s.getProtocolStorageStats(ctx, name)
-		if ok {
-			totalCIDs += objectCount
-			totalStorageBytes += storageBytes
-		} else {
-			us := uploadMap[name]
-			totalCIDs += us.TotalUploads
-			totalStorageBytes += us.TotalStorageBytes
-		}
-	}
-	for _, ps := range pinStats {
-		totalPins += ps.TotalPins
+	var totalUploads, totalPins, totalStorageBytes uint64
+	for _, p := range protoResp.Protocols {
+		totalUploads += p.TotalUploads
+		totalPins += p.TotalPins
+		totalStorageBytes += p.TotalStorageBytes
 	}
 
 	return &pluginCore.AggregateStatsResponse{
-		TotalCIDs:         totalCIDs,
-		TotalPinners:      totalPins,
+		TotalUploads:      totalUploads,
+		TotalPins:         totalPins,
 		TotalStorageBytes: totalStorageBytes,
 	}, nil
 }
@@ -313,11 +278,14 @@ func (s *MetaServiceDefault) ExportSiaObject(ctx context.Context, cidStr string)
 	bucket := upload.Protocol
 	objectKey := storageProto.EncodeFileName(hash)
 
-	exists, renterObj, err := s.renterSvc.UploadExists(ctx, bucket, objectKey)
+	sharedObj, renterObj, err := s.renterSvc.SharedObject(ctx, bucket, objectKey)
 	if err != nil {
+		if errors.Is(err, core.ErrUploadNotFound) {
+			return nil, ErrCIDNotFound
+		}
 		return nil, err
 	}
-	if !exists || renterObj == nil {
+	if renterObj == nil {
 		return nil, ErrCIDNotFound
 	}
 
@@ -325,17 +293,13 @@ func (s *MetaServiceDefault) ExportSiaObject(ctx context.Context, cidStr string)
 		return nil, ErrObjectNotReady
 	}
 
-	sharedObj, err := buildSharedObjectJSON(renterObj)
-	if err != nil {
-		return nil, err
+	if sharedObj == nil {
+		return nil, ErrObjectNotReady
 	}
 
 	return &pluginCore.CIDExportResponse{
 		CID:          cidStr,
-		SiaObjectID:  renterObj.SiaObjectID,
 		SizeBytes:    uint64(renterObj.Size),
-		Bucket:       renterObj.Bucket,
-		ObjectKey:    renterObj.ObjectKey,
 		SharedObject: sharedObj,
 		CreatedAt:    renterObj.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:    renterObj.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
@@ -443,11 +407,14 @@ func (s *MetaServiceDefault) exportBlockSiaObject(ctx context.Context, storagePr
 
 	objectKey := storageProto.EncodeFileName(hash)
 
-	exists, renterObj, err := s.renterSvc.UploadExists(ctx, bucket, objectKey)
+	sharedObj, renterObj, err := s.renterSvc.SharedObject(ctx, bucket, objectKey)
 	if err != nil {
+		if errors.Is(err, core.ErrUploadNotFound) {
+			return nil, ErrCIDNotFound
+		}
 		return nil, err
 	}
-	if !exists || renterObj == nil {
+	if renterObj == nil {
 		return nil, ErrCIDNotFound
 	}
 
@@ -455,17 +422,13 @@ func (s *MetaServiceDefault) exportBlockSiaObject(ctx context.Context, storagePr
 		return nil, ErrObjectNotReady
 	}
 
-	sharedObj, err := buildSharedObjectJSON(renterObj)
-	if err != nil {
-		return nil, err
+	if sharedObj == nil {
+		return nil, ErrObjectNotReady
 	}
 
 	return &pluginCore.CIDExportResponse{
 		CID:          cidStr,
-		SiaObjectID:  renterObj.SiaObjectID,
 		SizeBytes:    uint64(renterObj.Size),
-		Bucket:       renterObj.Bucket,
-		ObjectKey:    renterObj.ObjectKey,
 		SharedObject: sharedObj,
 		CreatedAt:    renterObj.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:    renterObj.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
@@ -493,11 +456,3 @@ func (s *MetaServiceDefault) checkExportAllowed(ctx context.Context, upload *mod
 	return nil
 }
 
-// buildSharedObjectJSON extracts the SharedObject from a RenterObject's SealedData.
-func buildSharedObjectJSON(renterObj *models.RenterObject) (map[string]any, error) {
-	var shared map[string]any
-	if err := json.Unmarshal(renterObj.SealedData, &shared); err != nil {
-		return nil, fmt.Errorf("failed to parse SealedData: %w", err)
-	}
-	return shared, nil
-}

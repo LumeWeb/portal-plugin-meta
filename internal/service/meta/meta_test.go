@@ -47,7 +47,7 @@ func TestMetaService_CIDStats_NotPinned(t *testing.T) {
 		require.NoError(tb, err)
 		assert.Equal(tb, testCID, resp.CID)
 		assert.False(tb, resp.Pinned)
-		assert.Equal(tb, uint64(0), resp.PinnerCount)
+		assert.Equal(tb, uint64(0), resp.PinCount)
 		assert.Equal(tb, uint64(1024), resp.SizeBytes)
 		assert.Nil(tb, resp.FirstPinnedAt)
 		assert.Nil(tb, resp.LastPinnedAt)
@@ -76,7 +76,7 @@ func TestMetaService_CIDStats_PinnedWithPins(t *testing.T) {
 		resp, err := svc.CIDStats(context.Background(), testCID)
 		require.NoError(tb, err)
 		assert.True(tb, resp.Pinned)
-		assert.Equal(tb, uint64(2), resp.PinnerCount)
+		assert.Equal(tb, uint64(2), resp.PinCount)
 		assert.Equal(tb, uint64(1024), resp.SizeBytes)
 		assert.Greater(tb, resp.StorageDays, 0.0)
 		assert.NotNil(tb, resp.FirstPinnedAt)
@@ -117,6 +117,7 @@ func TestMetaService_AggregateStats_Success(t *testing.T) {
 		uploadSvc := coreTesting.GetMockUploadService(ctx)
 		pinSvc := coreTesting.GetMockPinService(ctx)
 
+		// ProtocolStats calls GetUploadStats + GetPinStats first.
 		uploadSvc.EXPECT().GetUploadStats(mock.Anything).Return([]core.ProtocolUploadStat{
 			{Protocol: "sia", TotalUploads: 10, TotalStorageBytes: 1024},
 			{Protocol: "s3", TotalUploads: 5, TotalStorageBytes: 512},
@@ -126,13 +127,15 @@ func TestMetaService_AggregateStats_Success(t *testing.T) {
 			{Protocol: "s3", TotalPins: 10},
 		}, nil).Once()
 
+		// AggregateStats derives from ProtocolStats, no GetAllUploads needed.
+
 		svc := core.GetService[pluginCore.MetaService](ctx, pluginCore.META_SERVICE)
 		require.NotNil(tb, svc)
 
 		resp, err := svc.AggregateStats(context.Background())
 		require.NoError(tb, err)
-		assert.Equal(tb, uint64(15), resp.TotalCIDs)
-		assert.Equal(tb, uint64(30), resp.TotalPinners)
+		assert.Equal(tb, uint64(15), resp.TotalUploads)
+		assert.Equal(tb, uint64(30), resp.TotalPins)
 		assert.Equal(tb, uint64(1536), resp.TotalStorageBytes)
 	}, baseTestOptions)
 }
@@ -141,6 +144,7 @@ func TestMetaService_AggregateStats_UploadError(t *testing.T) {
 	coreTesting.RunTestCase(t, func(tb coreTesting.TB, ctx coreTesting.TestContext) {
 		uploadSvc := coreTesting.GetMockUploadService(ctx)
 
+		// ProtocolStats calls GetUploadStats first; that's where the error hits.
 		uploadSvc.EXPECT().GetUploadStats(mock.Anything).Return(nil, errors.New("db error")).Once()
 
 		svc := core.GetService[pluginCore.MetaService](ctx, pluginCore.META_SERVICE)
@@ -164,8 +168,8 @@ func TestMetaService_AggregateStats_Empty(t *testing.T) {
 
 		resp, err := svc.AggregateStats(context.Background())
 		require.NoError(tb, err)
-		assert.Equal(tb, uint64(0), resp.TotalCIDs)
-		assert.Equal(tb, uint64(0), resp.TotalPinners)
+		assert.Equal(tb, uint64(0), resp.TotalUploads)
+		assert.Equal(tb, uint64(0), resp.TotalPins)
 		assert.Equal(tb, uint64(0), resp.TotalStorageBytes)
 	}, baseTestOptions)
 }
@@ -223,20 +227,17 @@ func TestMetaService_ExportSiaObject_ObjectStaged(t *testing.T) {
 			Size:     1024,
 		}, nil).Once()
 
-		renterSvc.EXPECT().UploadExists(mock.Anything, mock.Anything, mock.Anything).Return(false, nil, nil).Maybe()
+		renterSvc.EXPECT().SharedObject(mock.Anything, mock.Anything, mock.Anything).Return(nil, &models.RenterObject{Status: models.RenterObjectStatusStaged, Size: 1024}, nil).Once()
 
 		svc := core.GetService[pluginCore.MetaService](ctx, pluginCore.META_SERVICE)
 		require.NotNil(tb, svc)
 
 		_, err := svc.ExportSiaObject(context.Background(), testCID)
-		assert.Error(tb, err) // object not found / not ready
+		assert.ErrorIs(tb, err, ErrObjectNotReady)
 	}, baseTestOptions)
 }
 
 func TestMetaService_ExportSiaObject_Success(t *testing.T) {
-	// Success path requires a registered StorageProtocol which is tested
-	// at the API integration level. At the service level we verify that
-	// the export fails gracefully when the renter object doesn't exist.
 	coreTesting.RunTestCase(t, func(tb coreTesting.TB, ctx coreTesting.TestContext) {
 		uploadSvc := coreTesting.GetMockUploadService(ctx)
 		renterSvc := coreTesting.GetMockRenterService(ctx)
@@ -246,13 +247,16 @@ func TestMetaService_ExportSiaObject_Success(t *testing.T) {
 			Size:     2048,
 		}, nil).Once()
 
-		renterSvc.EXPECT().UploadExists(mock.Anything, mock.Anything, mock.Anything).Return(false, nil, nil).Maybe()
+		renterSvc.EXPECT().SharedObject(mock.Anything, mock.Anything, mock.Anything).Return(&core.SharedObject{}, &models.RenterObject{Status: models.RenterObjectStatusUploaded, Size: 2048}, nil).Once()
 
 		svc := core.GetService[pluginCore.MetaService](ctx, pluginCore.META_SERVICE)
 		require.NotNil(tb, svc)
 
-		_, err := svc.ExportSiaObject(context.Background(), testCID)
-		assert.Error(tb, err) // object not found
+		resp, err := svc.ExportSiaObject(context.Background(), testCID)
+		require.NoError(tb, err)
+		assert.Equal(tb, testCID, resp.CID)
+		assert.Equal(tb, uint64(2048), resp.SizeBytes)
+		assert.NotNil(tb, resp.SharedObject)
 	}, baseTestOptions)
 }
 
@@ -368,8 +372,8 @@ func TestMetaService_AggregateStats_UsesStorageStatsProvider(t *testing.T) {
 		require.NoError(tb, err)
 
 		// Should use StorageStatsProvider values, not GetUploadStats.
-		assert.Equal(tb, uint64(42), resp.TotalCIDs)
-		assert.Equal(tb, uint64(15), resp.TotalPinners)
+		assert.Equal(tb, uint64(42), resp.TotalUploads)
+		assert.Equal(tb, uint64(15), resp.TotalPins)
 		assert.Equal(tb, uint64(2048), resp.TotalStorageBytes)
 	}, opts)
 }

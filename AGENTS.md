@@ -60,7 +60,7 @@ The plugin registers a `core.Service` (MetaService) and a `core.API` on the `met
 - `GET /api/stats/cid/:cid` — pinned status, pinner count, size, storage-days, quota health (when quota plugin available)
 - `GET /api/stats/aggregate` — aggregate totals across all protocols
 - `GET /api/stats/protocols` — per-protocol upload/storage/pin counts
-- `GET /api/export/cid/:cid/sia-object` — Sia SharedObject export (slabs, encryption keys, sector refs)
+- `GET /api/export/cid/:cid/sia-object` — Sia SharedObject export (slabs, encryption keys, data key, sector refs)
 - `GET /api/export/cid/:cid/dag` — full DAG export (tree of SharedObjects via ProtocolDAGProvider)
 
 ### Quota Integration

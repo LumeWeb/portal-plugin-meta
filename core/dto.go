@@ -1,12 +1,16 @@
 package core
 
+import (
+	portalCore "go.lumeweb.com/portal/core"
+)
+
 // CIDStatsResponse is returned by CIDStats.
 type CIDStatsResponse struct {
-	CID           string  `json:"cid"`
-	Pinned        bool    `json:"pinned"`
-	PinnerCount   uint64  `json:"pinner_count"`
-	SizeBytes     uint64  `json:"size_bytes"`
-	StorageDays   float64 `json:"storage_days"`
+	CID         string  `json:"cid"`
+	Pinned      bool    `json:"pinned"`
+	PinCount    uint64  `json:"pin_count"`
+	SizeBytes   uint64  `json:"size_bytes"`
+	StorageDays float64 `json:"storage_days"`
 	FirstPinnedAt *string `json:"first_pinned_at,omitempty"`
 	LastPinnedAt  *string `json:"last_pinned_at,omitempty"`
 
@@ -20,9 +24,15 @@ type CIDStatsResponse struct {
 }
 
 // AggregateStatsResponse is returned by AggregateStats.
+//
+// Field semantics:
+//   - total_uploads: sum of per-protocol upload counts. Each upload is
+//     protocol-specific, so this is already unique across protocols.
+//   - total_pins: sum of all pin relationships across all protocols.
+//   - total_storage_bytes: sum of per-protocol storage bytes.
 type AggregateStatsResponse struct {
-	TotalCIDs         uint64 `json:"total_cids"`
-	TotalPinners      uint64 `json:"total_pinners"`
+	TotalUploads      uint64 `json:"total_uploads"`
+	TotalPins         uint64 `json:"total_pins"`
 	TotalStorageBytes uint64 `json:"total_storage_bytes"`
 }
 
@@ -41,14 +51,11 @@ type ProtocolStat struct {
 
 // CIDExportResponse is returned by ExportSiaObject.
 type CIDExportResponse struct {
-	CID          string         `json:"cid"`
-	SiaObjectID  string         `json:"sia_object_id"`
-	SizeBytes    uint64         `json:"size_bytes"`
-	Bucket       string         `json:"bucket"`
-	ObjectKey    string         `json:"object_key"`
-	SharedObject map[string]any `json:"shared_object"`
-	CreatedAt    string         `json:"created_at"`
-	UpdatedAt    string         `json:"updated_at"`
+	CID          string             `json:"cid"`
+	SizeBytes    uint64             `json:"size_bytes"`
+	SharedObject *portalCore.SharedObject `json:"shared_object"`
+	CreatedAt    string             `json:"created_at"`
+	UpdatedAt    string             `json:"updated_at"`
 }
 
 // DAGExportResponse is returned by ExportDAG.

@@ -70,6 +70,7 @@ func TestAPI_RegistersAllRoutes(t *testing.T) {
 		pinSvc.EXPECT().GetAllPinsByHash(mock.Anything, mock.Anything).Return([]*models.Pin{}, nil).Maybe()
 		pinSvc.EXPECT().GetPinStats(mock.Anything).Return([]core.ProtocolPinStat{}, nil).Maybe()
 		renterSvc.EXPECT().UploadExists(mock.Anything, mock.Anything, mock.Anything).Return(true, &models.RenterObject{Status: models.RenterObjectStatusUploaded, SealedData: []byte("{}")}, nil).Maybe()
+		renterSvc.EXPECT().SharedObject(mock.Anything, mock.Anything, mock.Anything).Return(&core.SharedObject{}, &models.RenterObject{Status: models.RenterObjectStatusUploaded}, nil).Maybe()
 
 		expectedRoutes := []struct {
 			method string
@@ -180,8 +181,8 @@ func TestAPI_AggregateStats_ReturnsStats(t *testing.T) {
 		var resp pluginCore.AggregateStatsResponse
 		err := json.Unmarshal(rec.Body.Bytes(), &resp)
 		require.NoError(tb, err)
-		assert.Equal(tb, uint64(10), resp.TotalCIDs)
-		assert.Equal(tb, uint64(5), resp.TotalPinners)
+		assert.Equal(tb, uint64(10), resp.TotalUploads)
+		assert.Equal(tb, uint64(5), resp.TotalPins)
 		assert.Equal(tb, uint64(1024), resp.TotalStorageBytes)
 	}, opts)
 }
