@@ -2,7 +2,6 @@ package meta
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -313,11 +312,14 @@ func (s *MetaServiceDefault) ExportSiaObject(ctx context.Context, cidStr string)
 	bucket := upload.Protocol
 	objectKey := storageProto.EncodeFileName(hash)
 
-	exists, renterObj, err := s.renterSvc.UploadExists(ctx, bucket, objectKey)
+	sharedObj, renterObj, err := s.renterSvc.SharedObject(ctx, bucket, objectKey)
 	if err != nil {
+		if errors.Is(err, core.ErrUploadNotFound) {
+			return nil, ErrCIDNotFound
+		}
 		return nil, err
 	}
-	if !exists || renterObj == nil {
+	if renterObj == nil {
 		return nil, ErrCIDNotFound
 	}
 
@@ -325,17 +327,13 @@ func (s *MetaServiceDefault) ExportSiaObject(ctx context.Context, cidStr string)
 		return nil, ErrObjectNotReady
 	}
 
-	sharedObj, err := buildSharedObjectJSON(renterObj)
-	if err != nil {
-		return nil, err
+	if sharedObj == nil {
+		return nil, ErrObjectNotReady
 	}
 
 	return &pluginCore.CIDExportResponse{
 		CID:          cidStr,
-		SiaObjectID:  renterObj.SiaObjectID,
 		SizeBytes:    uint64(renterObj.Size),
-		Bucket:       renterObj.Bucket,
-		ObjectKey:    renterObj.ObjectKey,
 		SharedObject: sharedObj,
 		CreatedAt:    renterObj.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:    renterObj.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
@@ -443,11 +441,14 @@ func (s *MetaServiceDefault) exportBlockSiaObject(ctx context.Context, storagePr
 
 	objectKey := storageProto.EncodeFileName(hash)
 
-	exists, renterObj, err := s.renterSvc.UploadExists(ctx, bucket, objectKey)
+	sharedObj, renterObj, err := s.renterSvc.SharedObject(ctx, bucket, objectKey)
 	if err != nil {
+		if errors.Is(err, core.ErrUploadNotFound) {
+			return nil, ErrCIDNotFound
+		}
 		return nil, err
 	}
-	if !exists || renterObj == nil {
+	if renterObj == nil {
 		return nil, ErrCIDNotFound
 	}
 
@@ -455,17 +456,13 @@ func (s *MetaServiceDefault) exportBlockSiaObject(ctx context.Context, storagePr
 		return nil, ErrObjectNotReady
 	}
 
-	sharedObj, err := buildSharedObjectJSON(renterObj)
-	if err != nil {
-		return nil, err
+	if sharedObj == nil {
+		return nil, ErrObjectNotReady
 	}
 
 	return &pluginCore.CIDExportResponse{
 		CID:          cidStr,
-		SiaObjectID:  renterObj.SiaObjectID,
 		SizeBytes:    uint64(renterObj.Size),
-		Bucket:       renterObj.Bucket,
-		ObjectKey:    renterObj.ObjectKey,
 		SharedObject: sharedObj,
 		CreatedAt:    renterObj.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:    renterObj.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
@@ -493,11 +490,3 @@ func (s *MetaServiceDefault) checkExportAllowed(ctx context.Context, upload *mod
 	return nil
 }
 
-// buildSharedObjectJSON extracts the SharedObject from a RenterObject's SealedData.
-func buildSharedObjectJSON(renterObj *models.RenterObject) (map[string]any, error) {
-	var shared map[string]any
-	if err := json.Unmarshal(renterObj.SealedData, &shared); err != nil {
-		return nil, fmt.Errorf("failed to parse SealedData: %w", err)
-	}
-	return shared, nil
-}

@@ -223,20 +223,17 @@ func TestMetaService_ExportSiaObject_ObjectStaged(t *testing.T) {
 			Size:     1024,
 		}, nil).Once()
 
-		renterSvc.EXPECT().UploadExists(mock.Anything, mock.Anything, mock.Anything).Return(false, nil, nil).Maybe()
+		renterSvc.EXPECT().SharedObject(mock.Anything, mock.Anything, mock.Anything).Return(nil, &models.RenterObject{Status: models.RenterObjectStatusStaged, Size: 1024}, nil).Once()
 
 		svc := core.GetService[pluginCore.MetaService](ctx, pluginCore.META_SERVICE)
 		require.NotNil(tb, svc)
 
 		_, err := svc.ExportSiaObject(context.Background(), testCID)
-		assert.Error(tb, err) // object not found / not ready
+		assert.ErrorIs(tb, err, ErrObjectNotReady)
 	}, baseTestOptions)
 }
 
 func TestMetaService_ExportSiaObject_Success(t *testing.T) {
-	// Success path requires a registered StorageProtocol which is tested
-	// at the API integration level. At the service level we verify that
-	// the export fails gracefully when the renter object doesn't exist.
 	coreTesting.RunTestCase(t, func(tb coreTesting.TB, ctx coreTesting.TestContext) {
 		uploadSvc := coreTesting.GetMockUploadService(ctx)
 		renterSvc := coreTesting.GetMockRenterService(ctx)
@@ -246,13 +243,16 @@ func TestMetaService_ExportSiaObject_Success(t *testing.T) {
 			Size:     2048,
 		}, nil).Once()
 
-		renterSvc.EXPECT().UploadExists(mock.Anything, mock.Anything, mock.Anything).Return(false, nil, nil).Maybe()
+		renterSvc.EXPECT().SharedObject(mock.Anything, mock.Anything, mock.Anything).Return(&core.SharedObject{}, &models.RenterObject{Status: models.RenterObjectStatusUploaded, Size: 2048}, nil).Once()
 
 		svc := core.GetService[pluginCore.MetaService](ctx, pluginCore.META_SERVICE)
 		require.NotNil(tb, svc)
 
-		_, err := svc.ExportSiaObject(context.Background(), testCID)
-		assert.Error(tb, err) // object not found
+		resp, err := svc.ExportSiaObject(context.Background(), testCID)
+		require.NoError(tb, err)
+		assert.Equal(tb, testCID, resp.CID)
+		assert.Equal(tb, uint64(2048), resp.SizeBytes)
+		assert.NotNil(tb, resp.SharedObject)
 	}, baseTestOptions)
 }
 

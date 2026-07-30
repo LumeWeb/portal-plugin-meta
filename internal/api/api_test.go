@@ -70,6 +70,7 @@ func TestAPI_RegistersAllRoutes(t *testing.T) {
 		pinSvc.EXPECT().GetAllPinsByHash(mock.Anything, mock.Anything).Return([]*models.Pin{}, nil).Maybe()
 		pinSvc.EXPECT().GetPinStats(mock.Anything).Return([]core.ProtocolPinStat{}, nil).Maybe()
 		renterSvc.EXPECT().UploadExists(mock.Anything, mock.Anything, mock.Anything).Return(true, &models.RenterObject{Status: models.RenterObjectStatusUploaded, SealedData: []byte("{}")}, nil).Maybe()
+		renterSvc.EXPECT().SharedObject(mock.Anything, mock.Anything, mock.Anything).Return(&core.SharedObject{}, &models.RenterObject{Status: models.RenterObjectStatusUploaded}, nil).Maybe()
 
 		expectedRoutes := []struct {
 			method string
