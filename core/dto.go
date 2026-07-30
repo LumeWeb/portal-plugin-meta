@@ -1,5 +1,9 @@
 package core
 
+import (
+	portalCore "go.lumeweb.com/portal/core"
+)
+
 // CIDStatsResponse is returned by CIDStats.
 type CIDStatsResponse struct {
 	CID           string  `json:"cid"`
@@ -41,14 +45,11 @@ type ProtocolStat struct {
 
 // CIDExportResponse is returned by ExportSiaObject.
 type CIDExportResponse struct {
-	CID          string         `json:"cid"`
-	SiaObjectID  string         `json:"sia_object_id"`
-	SizeBytes    uint64         `json:"size_bytes"`
-	Bucket       string         `json:"bucket"`
-	ObjectKey    string         `json:"object_key"`
-	SharedObject map[string]any `json:"shared_object"`
-	CreatedAt    string         `json:"created_at"`
-	UpdatedAt    string         `json:"updated_at"`
+	CID          string             `json:"cid"`
+	SizeBytes    uint64             `json:"size_bytes"`
+	SharedObject *portalCore.SharedObject `json:"shared_object"`
+	CreatedAt    string             `json:"created_at"`
+	UpdatedAt    string             `json:"updated_at"`
 }
 
 // DAGExportResponse is returned by ExportDAG.
