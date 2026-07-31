@@ -181,8 +181,8 @@ func TestAPI_AggregateStats_ReturnsStats(t *testing.T) {
 		var resp pluginCore.AggregateStatsResponse
 		err := json.Unmarshal(rec.Body.Bytes(), &resp)
 		require.NoError(tb, err)
-		assert.Equal(tb, uint64(10), resp.TotalCIDs)
-		assert.Equal(tb, uint64(5), resp.TotalPinners)
+		assert.Equal(tb, uint64(10), resp.TotalUploads)
+		assert.Equal(tb, uint64(5), resp.TotalPins)
 		assert.Equal(tb, uint64(1024), resp.TotalStorageBytes)
 	}, opts)
 }

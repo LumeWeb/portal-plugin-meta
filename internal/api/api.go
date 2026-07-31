@@ -67,7 +67,7 @@ func (a *API) Configure(gRouter router.Router, accessSvc core.AccessService) err
 			router.WithCors(),
 			router.WithSwaggerOptions(
 				router.WithSummary("CID stats"),
-				router.WithDescription("Returns anonymized stats for a CID: pinned status, pinner count, size, storage-days, and quota health (when quota plugin is available)."),
+				router.WithDescription("Returns anonymized stats for a CID: pinned status, pin count, size, storage-days, and quota health (when quota plugin is available)."),
 				router.WithTags("stats"),
 				router.WithPathParam("cid", "Content identifier (CID)", ""),
 				router.WithSuccessResponse(http.StatusOK, "CID stats", router.WithJSONContent(pluginCore.CIDStatsResponse{})),
@@ -78,7 +78,7 @@ func (a *API) Configure(gRouter router.Router, accessSvc core.AccessService) err
 			router.WithCors(),
 			router.WithSwaggerOptions(
 				router.WithSummary("Aggregate stats"),
-				router.WithDescription("Total CIDs, pinners, storage bytes across all protocols."),
+				router.WithDescription("Total uploads, pins, and storage bytes across all protocols."),
 				router.WithTags("stats"),
 				router.WithSuccessResponse(http.StatusOK, "Aggregate stats", router.WithJSONContent(pluginCore.AggregateStatsResponse{})),
 				router.WithErrorResponses(router.DefaultPublicErrorResponses()),

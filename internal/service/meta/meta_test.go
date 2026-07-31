@@ -47,7 +47,7 @@ func TestMetaService_CIDStats_NotPinned(t *testing.T) {
 		require.NoError(tb, err)
 		assert.Equal(tb, testCID, resp.CID)
 		assert.False(tb, resp.Pinned)
-		assert.Equal(tb, uint64(0), resp.PinnerCount)
+		assert.Equal(tb, uint64(0), resp.PinCount)
 		assert.Equal(tb, uint64(1024), resp.SizeBytes)
 		assert.Nil(tb, resp.FirstPinnedAt)
 		assert.Nil(tb, resp.LastPinnedAt)
@@ -76,7 +76,7 @@ func TestMetaService_CIDStats_PinnedWithPins(t *testing.T) {
 		resp, err := svc.CIDStats(context.Background(), testCID)
 		require.NoError(tb, err)
 		assert.True(tb, resp.Pinned)
-		assert.Equal(tb, uint64(2), resp.PinnerCount)
+		assert.Equal(tb, uint64(2), resp.PinCount)
 		assert.Equal(tb, uint64(1024), resp.SizeBytes)
 		assert.Greater(tb, resp.StorageDays, 0.0)
 		assert.NotNil(tb, resp.FirstPinnedAt)
@@ -131,8 +131,8 @@ func TestMetaService_AggregateStats_Success(t *testing.T) {
 
 		resp, err := svc.AggregateStats(context.Background())
 		require.NoError(tb, err)
-		assert.Equal(tb, uint64(15), resp.TotalCIDs)
-		assert.Equal(tb, uint64(30), resp.TotalPinners)
+		assert.Equal(tb, uint64(15), resp.TotalUploads)
+		assert.Equal(tb, uint64(30), resp.TotalPins)
 		assert.Equal(tb, uint64(1536), resp.TotalStorageBytes)
 	}, baseTestOptions)
 }
@@ -164,8 +164,8 @@ func TestMetaService_AggregateStats_Empty(t *testing.T) {
 
 		resp, err := svc.AggregateStats(context.Background())
 		require.NoError(tb, err)
-		assert.Equal(tb, uint64(0), resp.TotalCIDs)
-		assert.Equal(tb, uint64(0), resp.TotalPinners)
+		assert.Equal(tb, uint64(0), resp.TotalUploads)
+		assert.Equal(tb, uint64(0), resp.TotalPins)
 		assert.Equal(tb, uint64(0), resp.TotalStorageBytes)
 	}, baseTestOptions)
 }
@@ -368,8 +368,8 @@ func TestMetaService_AggregateStats_UsesStorageStatsProvider(t *testing.T) {
 		require.NoError(tb, err)
 
 		// Should use StorageStatsProvider values, not GetUploadStats.
-		assert.Equal(tb, uint64(42), resp.TotalCIDs)
-		assert.Equal(tb, uint64(15), resp.TotalPinners)
+		assert.Equal(tb, uint64(42), resp.TotalUploads)
+		assert.Equal(tb, uint64(15), resp.TotalPins)
 		assert.Equal(tb, uint64(2048), resp.TotalStorageBytes)
 	}, opts)
 }

@@ -95,7 +95,7 @@ func (s *MetaServiceDefault) CIDStats(ctx context.Context, cidStr string) (*plug
 	if err != nil {
 		return nil, err
 	}
-	resp.PinnerCount = uint64(len(pins))
+	resp.PinCount = uint64(len(pins))
 
 	if len(pins) == 0 {
 		return resp, nil
@@ -144,56 +144,22 @@ func (s *MetaServiceDefault) CIDStats(ctx context.Context, cidStr string) (*plug
 }
 
 func (s *MetaServiceDefault) AggregateStats(ctx context.Context) (*pluginCore.AggregateStatsResponse, error) {
-	uploadStats, err := s.uploadSvc.GetUploadStats(ctx)
+	// Derive from ProtocolStats to avoid duplicated logic.
+	protoResp, err := s.ProtocolStats(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	pinStats, err := s.pinSvc.GetPinStats(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Build a map of upload stats for fallback when a protocol doesn't
-	// implement ProtocolStorageStatsProvider.
-	uploadMap := make(map[string]core.ProtocolUploadStat)
-	for _, us := range uploadStats {
-		uploadMap[us.Protocol] = us
-	}
-
-	// Collect the unified set of protocol names from upload stats, pin
-	// stats, and registered protocols.
-	protocolSet := make(map[string]struct{})
-	for _, us := range uploadStats {
-		protocolSet[us.Protocol] = struct{}{}
-	}
-	for _, ps := range pinStats {
-		protocolSet[ps.Protocol] = struct{}{}
-	}
-	for name := range core.GetProtocols() {
-		protocolSet[name] = struct{}{}
-	}
-
-	var totalCIDs, totalStorageBytes, totalPins uint64
-	for name := range protocolSet {
-		// Try ProtocolStorageStatsProvider first for accurate storage bytes.
-		storageBytes, objectCount, ok := s.getProtocolStorageStats(ctx, name)
-		if ok {
-			totalCIDs += objectCount
-			totalStorageBytes += storageBytes
-		} else {
-			us := uploadMap[name]
-			totalCIDs += us.TotalUploads
-			totalStorageBytes += us.TotalStorageBytes
-		}
-	}
-	for _, ps := range pinStats {
-		totalPins += ps.TotalPins
+	var totalUploads, totalPins, totalStorageBytes uint64
+	for _, p := range protoResp.Protocols {
+		totalUploads += p.TotalUploads
+		totalPins += p.TotalPins
+		totalStorageBytes += p.TotalStorageBytes
 	}
 
 	return &pluginCore.AggregateStatsResponse{
-		TotalCIDs:         totalCIDs,
-		TotalPinners:      totalPins,
+		TotalUploads:      totalUploads,
+		TotalPins:         totalPins,
 		TotalStorageBytes: totalStorageBytes,
 	}, nil
 }
