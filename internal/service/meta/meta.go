@@ -12,6 +12,7 @@ import (
 	quotaCore "go.lumeweb.com/portal-plugin-quota/core"
 	"go.lumeweb.com/portal/core"
 	"go.lumeweb.com/portal/db/models"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 var (
@@ -61,6 +62,10 @@ func NewMetaService() (core.Service, []core.ContextBuilderOption, error) {
 func (s *MetaServiceDefault) ID() string { return pluginCore.META_SERVICE }
 
 func (s *MetaServiceDefault) CIDStats(ctx context.Context, cidStr string) (*pluginCore.CIDStatsResponse, error) {
+	ctx, span := core.TraceMethod(ctx, "MetaService.CIDStats")
+	defer span.End()
+	span.SetAttributes(attribute.String("meta.cid", cidStr))
+
 	hash, err := core.ParseStorageHash(cidStr)
 	if err != nil {
 		return nil, err
@@ -144,6 +149,9 @@ func (s *MetaServiceDefault) CIDStats(ctx context.Context, cidStr string) (*plug
 }
 
 func (s *MetaServiceDefault) AggregateStats(ctx context.Context) (*pluginCore.AggregateStatsResponse, error) {
+	ctx, span := core.TraceMethod(ctx, "MetaService.AggregateStats")
+	defer span.End()
+
 	// Derive from ProtocolStats to avoid duplicated logic.
 	protoResp, err := s.ProtocolStats(ctx)
 	if err != nil {
@@ -167,6 +175,10 @@ func (s *MetaServiceDefault) AggregateStats(ctx context.Context) (*pluginCore.Ag
 // getProtocolStorageStats returns (storageBytes, objectCount, true) if the
 // protocol implements ProtocolStorageStatsProvider, otherwise (0, 0, false).
 func (s *MetaServiceDefault) getProtocolStorageStats(ctx context.Context, name string) (storageBytes, objectCount uint64, ok bool) {
+	_, span := core.TraceMethod(ctx, "MetaService.getProtocolStorageStats")
+	defer span.End()
+	span.SetAttributes(attribute.String("meta.protocol", name))
+
 	proto := core.GetProtocol(name)
 	if proto == nil {
 		return 0, 0, false
@@ -183,6 +195,9 @@ func (s *MetaServiceDefault) getProtocolStorageStats(ctx context.Context, name s
 }
 
 func (s *MetaServiceDefault) ProtocolStats(ctx context.Context) (*pluginCore.ProtocolStatsResponse, error) {
+	ctx, span := core.TraceMethod(ctx, "MetaService.ProtocolStats")
+	defer span.End()
+
 	uploadStats, err := s.uploadSvc.GetUploadStats(ctx)
 	if err != nil {
 		return nil, err
@@ -248,6 +263,10 @@ func (s *MetaServiceDefault) ProtocolStats(ctx context.Context) (*pluginCore.Pro
 }
 
 func (s *MetaServiceDefault) ExportSiaObject(ctx context.Context, cidStr string) (*pluginCore.CIDExportResponse, error) {
+	ctx, span := core.TraceMethod(ctx, "MetaService.ExportSiaObject")
+	defer span.End()
+	span.SetAttributes(attribute.String("meta.cid", cidStr))
+
 	hash, err := core.ParseStorageHash(cidStr)
 	if err != nil {
 		return nil, err
@@ -307,6 +326,10 @@ func (s *MetaServiceDefault) ExportSiaObject(ctx context.Context, cidStr string)
 }
 
 func (s *MetaServiceDefault) ExportDAG(ctx context.Context, rootCIDStr string) (*pluginCore.DAGExportResponse, error) {
+	ctx, span := core.TraceMethod(ctx, "MetaService.ExportDAG")
+	defer span.End()
+	span.SetAttributes(attribute.String("meta.rootCID", rootCIDStr))
+
 	hash, err := core.ParseStorageHash(rootCIDStr)
 	if err != nil {
 		return nil, err
@@ -354,6 +377,7 @@ func (s *MetaServiceDefault) ExportDAG(ctx context.Context, rootCIDStr string) (
 	if len(nodes) == 0 {
 		return nil, ErrCIDNotFound
 	}
+	span.SetAttributes(attribute.Int("meta.dag.blockCount", len(nodes)))
 
 	var blocks []pluginCore.DAGBlock
 	var totalSize uint64
@@ -400,6 +424,13 @@ func (s *MetaServiceDefault) ExportDAG(ctx context.Context, rootCIDStr string) (
 // parsing, upload lookup, protocol lookup, and ACL check that ExportSiaObject
 // would repeat per block.
 func (s *MetaServiceDefault) exportBlockSiaObject(ctx context.Context, storageProto core.StorageProtocol, bucket, cidStr string) (*pluginCore.CIDExportResponse, error) {
+	ctx, span := core.TraceMethod(ctx, "MetaService.exportBlockSiaObject")
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("meta.cid", cidStr),
+		attribute.String("meta.bucket", bucket),
+	)
+
 	hash, err := core.ParseStorageHash(cidStr)
 	if err != nil {
 		return nil, err
@@ -436,6 +467,13 @@ func (s *MetaServiceDefault) exportBlockSiaObject(ctx context.Context, storagePr
 }
 
 func (s *MetaServiceDefault) checkExportAllowed(ctx context.Context, upload *models.Upload, cidStr string) error {
+	_, span := core.TraceMethod(ctx, "MetaService.checkExportAllowed")
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("meta.cid", cidStr),
+		attribute.String("meta.protocol", upload.Protocol),
+	)
+
 	proto := core.GetProtocol(upload.Protocol)
 	if proto == nil {
 		return core.ErrExportDenied
